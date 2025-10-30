@@ -1,6 +1,5 @@
-package scooter.pages;
+package ru.yandex.scooter.pages;
 
-import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
@@ -40,6 +39,14 @@ public class OrderPage {
     @FindBy(xpath = "//input[contains(@class, 'select-search__input') and @placeholder='* Станция метро']")
     private WebElement metroStationField;
 
+    // Опции станций метро
+    @FindBy(xpath = "//*[contains(@class, 'select-search__option')]")
+    private List<WebElement> metroOptions;
+
+    // Активная опция станции метро
+    @FindBy(xpath = "//*[contains(@class, 'select-search__option') and contains(@class, 'is-active')]")
+    private WebElement activeMetroOption;
+
     // Поле "Телефон: на него позвонит курьер"
     @FindBy(xpath = "//input[contains(@class, 'Input_Input') and @placeholder='* Телефон: на него позвонит курьер']")
     private WebElement phoneInput;
@@ -57,6 +64,10 @@ public class OrderPage {
     // Выпадающий календарь
     @FindBy(xpath = "//div[contains(@class, 'react-datepicker')]")
     private WebElement calendar;
+
+    // Дни календаря
+    @FindBy(xpath = "//div[contains(@class, 'react-datepicker__day')]")
+    private List<WebElement> calendarDays;
 
     // Кликабельное "Срок аренды"
     @FindBy(xpath = "//div[contains(@class, 'Dropdown-placeholder') and text()='* Срок аренды']")
@@ -82,10 +93,24 @@ public class OrderPage {
     @FindBy(xpath = "//button[contains(@class, 'Button_Middle') and text()='Заказать']")
     private WebElement orderButton;
 
-    // === ЛОКАТОРЫ ДЛЯ СООБЩЕНИЯ ОБ ОШИБКАХ ===
+    // === ЛОКАТОРЫ ДЛЯ СООБЩЕНИЙ ОБ ОШИБКАХ ===
 
     @FindBy(xpath = "//div[contains(@class, 'Input_ErrorMessage')]")
     private List<WebElement> errorMessages;
+
+    // === ЛОКАТОРЫ ДЛЯ ФОРМ ===
+
+    // Форма "Для кого самокат"
+    @FindBy(xpath = "//div[contains(text(), 'Для кого самокат')]")
+    private WebElement formForWhomTitle;
+
+    // Форма "Про аренду"
+    @FindBy(xpath = "//div[contains(text(), 'Про аренду')]")
+    private WebElement formAboutRentTitle;
+
+    // Выпадающее меню
+    @FindBy(xpath = "//div[contains(@class, 'Dropdown-menu')]")
+    private WebElement dropdownMenu;
 
     // === МЕТОДЫ ДЛЯ ШАГА 1: ДЛЯ КОГО САМОКАТ ===
 
@@ -107,60 +132,23 @@ public class OrderPage {
         addressInput.sendKeys(address);
     }
 
-    // Дополнительные методы для работы со станцией метро
-    public void clickMetroStationField() {
-        metroStationField.click();
-    }
-
-    // Метод для выбора станции метро через ввод текста и выбор из списка
-    public void selectMetroStationByEnter(String stationName) {
-        try {
-            metroStationField.click();
-            Thread.sleep(1000);
-            metroStationField.sendKeys(stationName);
-            Thread.sleep(1000);
-            metroStationField.sendKeys(org.openqa.selenium.Keys.ENTER);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    // Метод для выбора станции метро через JavaScript
-    public void selectMetroStationByJavaScript(String stationName) {
-        try {
-            // Кликаем на поле метро
-            metroStationField.click();
-            Thread.sleep(1000);
-
-            // Ищем станцию в DOM и кликаем через JavaScript
-            org.openqa.selenium.JavascriptExecutor js = (org.openqa.selenium.JavascriptExecutor) driver;
-            String script = String.format(
-                    "var stations = document.querySelectorAll('button.Select_option__1h4bo, div.Select_option__1h4bo, .select-search__option'); " +
-                            "for (var i = 0; i < stations.length; i++) { " +
-                            "    if (stations[i].textContent.includes('%s')) { " +
-                            "        stations[i].click(); " +
-                            "        break; " +
-                            "    } " +
-                            "}", stationName);
-            js.executeScript(script);
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    // Упрощенный метод выбора первой станции
+    // Метод выбора станции метро (первая станция)
     public void selectFirstMetroStation() {
         try {
             metroStationField.click();
-            Thread.sleep(2000);
 
-            // Просто нажимаем Tab или Enter чтобы выбрать первую станцию
+            WebDriverWait wait = new WebDriverWait(driver, WAIT_TIMEOUT);
+            wait.until(ExpectedConditions.visibilityOfAllElements(metroOptions));
+
             metroStationField.sendKeys(org.openqa.selenium.Keys.ARROW_DOWN);
-            Thread.sleep(500);
+
+            wait.until(ExpectedConditions.visibilityOf(activeMetroOption));
+
             metroStationField.sendKeys(org.openqa.selenium.Keys.ENTER);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            // Fallback
+            metroStationField.click();
+            metroStationField.sendKeys(org.openqa.selenium.Keys.ENTER);
         }
     }
 
@@ -184,10 +172,14 @@ public class OrderPage {
         WebDriverWait wait = new WebDriverWait(driver, WAIT_TIMEOUT);
         wait.until(ExpectedConditions.visibilityOf(calendar));
 
-        // Формируем динамический локатор для выбранного дня
-        String dateXpath = String.format("//div[contains(@class, 'react-datepicker__day') and text()='%s']", day);
-        WebElement dateElement = wait.until(ExpectedConditions.elementToBeClickable(By.xpath(dateXpath)));
-        dateElement.click();
+        // Ищем нужный день среди всех дней календаря
+        for (WebElement dayElement : calendarDays) {
+            if (dayElement.getText().equals(day)) {
+                dayElement.click();
+                return;
+            }
+        }
+        throw new RuntimeException("День '" + day + "' не найден в календаре");
     }
 
     // Выбор срока аренды из выпадающего списка
@@ -236,6 +228,20 @@ public class OrderPage {
         }
     }
 
+    // Метод для проверки, что цвет выбран
+    public boolean isColorSelected(String color) {
+        switch (color.toLowerCase()) {
+            case "чёрный жемчуг":
+            case "black":
+                return blackPearlCheckbox.isSelected();
+            case "серая безысходность":
+            case "grey":
+                return greyDespairCheckbox.isSelected();
+            default:
+                return false;
+        }
+    }
+
     // Заполнение поля "Комментарий для курьера"
     public void enterComment(String comment) {
         commentInput.clear();
@@ -252,5 +258,73 @@ public class OrderPage {
     // Проверка наличия ошибок
     public boolean hasValidationErrors() {
         return !errorMessages.isEmpty();
+    }
+
+    // === МЕТОДЫ ДЛЯ ПОЛУЧЕНИЯ ЗНАЧЕНИЯ ПОЛЕЙ ===
+
+    public String getFirstNameInputValue() {
+        return firstNameInput.getAttribute("value");
+    }
+
+    public String getLastNameInputValue() {
+        return lastNameInput.getAttribute("value");
+    }
+
+    public String getAddressInputValue() {
+        return addressInput.getAttribute("value");
+    }
+
+    public String getPhoneInputValue() {
+        return phoneInput.getAttribute("value");
+    }
+
+    public String getDeliveryDateInputValue() {
+        return deliveryDateInput.getAttribute("value");
+    }
+
+    public String getCommentInputValue() {
+        return commentInput.getAttribute("value");
+    }
+
+    public boolean isMetroStationSelected() {
+        String value = metroStationField.getAttribute("value");
+        return value != null && !value.isEmpty();
+    }
+
+    // === МЕТОДЫ ДЛЯ ОЖИДАНИЙ ===
+
+    public void waitForOrderFormToLoad() {
+        WebDriverWait wait = new WebDriverWait(driver, WAIT_TIMEOUT);
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.urlContains("order"),
+                ExpectedConditions.visibilityOf(formForWhomTitle)
+        ));
+    }
+
+    public void waitForRentFormToLoad() {
+        WebDriverWait wait = new WebDriverWait(driver, WAIT_TIMEOUT);
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.visibilityOf(formAboutRentTitle),
+                ExpectedConditions.visibilityOf(deliveryDateInput)
+        ));
+    }
+
+    public void waitForDropdownToClose() {
+        WebDriverWait wait = new WebDriverWait(driver, WAIT_TIMEOUT);
+        wait.until(ExpectedConditions.invisibilityOf(dropdownMenu));
+    }
+
+    // === МЕТОДЫ ДЛЯ ПРОКРУТКИ ===
+
+    public void scrollToBottom() {
+        org.openqa.selenium.JavascriptExecutor js = (org.openqa.selenium.JavascriptExecutor) driver;
+        js.executeScript("window.scrollTo(0, document.body.scrollHeight)");
+
+        WebDriverWait wait = new WebDriverWait(driver, WAIT_TIMEOUT);
+        wait.until(driver -> {
+            Object result = js.executeScript(
+                    "return Math.abs(window.pageYOffset + window.innerHeight - document.body.scrollHeight) < 100");
+            return result instanceof Boolean && (Boolean) result;
+        });
     }
 }

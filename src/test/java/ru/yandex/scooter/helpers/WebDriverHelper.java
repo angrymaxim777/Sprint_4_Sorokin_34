@@ -1,4 +1,4 @@
-package scooter.helpers;
+package ru.yandex.scooter.helpers;
 
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
